@@ -1,0 +1,59 @@
+ #准备工作
+  if(1<2){
+    source("renv/activate.R")
+    library(survivalAnalysis)
+    library(survival)
+    library(magrittr)
+    library(dplyr)
+    library(survminer)
+    library(ggplot2)
+    library(ggpubr)
+    library(GEOquery)
+    library(data.table)
+    library(R.utils)
+    library(tidyverse)
+  }
+  
+  #读取本地GZ文件
+  clinical<-fread(file="GSE157009.clinical.tsv.gz",header=T)
+  expression<-fread(file="GSE157009.gene_expression_array.tsv.gz",header=T)
+  #从表达矩阵里面找到PHOSPHO1
+  b=which(expression$Gene_Symbol=='PHOSPHO1')
+  b
+  expression=expression[b,]
+  nrow(clinical)
+  clinical=clinical[,c(-1,-2,-3)]#删去无意义数据
+  expression=t(expression)#转置
+  expression=expression[-1,]#删除gene symbol
+  #合并
+  clinical=cbind(clinical,expression)
+  
+  z=which(is.na(clinical$OS_Time))
+  z
+  clinical=clinical[-z,]#去掉NA
+  clinical=as.data.frame(lapply(clinical,as.numeric))#字符数字转纯数字
+  for(i in 1:nrow(clinical)){
+    clinical[i,3]=10**(clinical[i,3])
+  }
+  #最佳截断
+  res.cut <- surv_cutpoint(clinical, time = "OS_Time", event = "OS_Status",
+                           variables = "expression")
+  
+  summary(res.cut)
+  #展示数据分布
+  plot(res.cut, "expression", palette = "npg")
+  #分类
+  # 3. Categorize variables
+  res.cat <- surv_categorize(res.cut)
+  head(res.cat)
+  #绘制
+  time=clinical$OS_Time
+  event=clinical$OS_Status
+  fit <- survfit(Surv(time, event) ~expression, data = res.cat)#拟合生存分析
+  #绘制生存曲线并显示P值
+  ggsurvplot(fit,
+             data = res.cat,
+             risk.table = TRUE,
+             pval = T)
+
+  
